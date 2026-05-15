@@ -1,4 +1,4 @@
-import { Client } from '@googlemaps/google-maps-services-js';
+import { Client, Language, TravelMode } from '@googlemaps/google-maps-services-js';
 
 let _client: Client | null = null;
 function client(): Client { return _client ?? (_client = new Client({})); }
@@ -7,7 +7,7 @@ export interface GeocodeResult { lat: number; lng: number; formatted_address: st
 
 export async function geocode(address: string): Promise<GeocodeResult | null> {
   const res = await client().geocode({
-    params: { address, key: process.env.GOOGLE_MAPS_API_KEY!, region: 'it', language: 'it' },
+    params: { address, key: process.env.GOOGLE_MAPS_API_KEY!, region: 'it', language: Language.it },
   });
   const top = res.data.results[0];
   if (!top) return null;
@@ -23,9 +23,9 @@ export async function optimizedRoute(opts: { origin: string; destination: string
       destination: opts.destination,
       waypoints: opts.waypoints.map((w) => `via:${w}`),
       // optimize:true reorders waypoints for the shortest total drive
-      optimize: true as any,
+      optimize: true,
       key: process.env.GOOGLE_MAPS_API_KEY!,
-      region: 'it', language: 'it', mode: 'driving' as any,
+      region: 'it', language: Language.it, mode: TravelMode.driving,
     },
   });
   return res.data;

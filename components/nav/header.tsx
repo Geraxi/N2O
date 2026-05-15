@@ -18,10 +18,12 @@ export function Header() {
         <Bell className="w-5 h-5" aria-hidden />
         <span className="hidden sm:inline">Notifiche</span>
       </button>
-      <button className="btn-secondary !py-2 !px-3" aria-label="Esci">
-        <LogOut className="w-5 h-5" aria-hidden />
-        <span className="hidden sm:inline">Esci</span>
-      </button>
+      <form action="/auth/signout" method="post">
+        <button type="submit" className="btn-secondary !py-2 !px-3" aria-label="Esci">
+          <LogOut className="w-5 h-5" aria-hidden />
+          <span className="hidden sm:inline">Esci</span>
+        </button>
+      </form>
     </header>
   );
 }

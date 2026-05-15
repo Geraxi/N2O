@@ -1,14 +1,22 @@
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import { ScadenzaBadge } from '@/components/ui/scadenza-badge';
+import { createClient } from '@/lib/supabase/server';
+import Link from 'next/link';
 
-// Phase 2 deliverable: "scadenze imminenti" dashboard backed by v_scadenze_imminenti.
-export default function ScadenzePage() {
-  const rows = [
-    { client: 'Officine Bianchi Srl', prodotto: 'Estintori',            id: 'EXT-12', citta: 'Milano',  data: '2026-05-18' },
-    { client: 'Edilforte Spa',         prodotto: 'Antincendio annuale', id: 'AI-04',  citta: 'Monza',   data: '2026-05-22' },
-    { client: 'Logistica Po Srl',      prodotto: 'Formazione RSPP',     id: '—',      citta: 'Gorgonzola', data: '2026-06-02' },
-    { client: 'Stampa Veloce Srl',     prodotto: 'DPI',                  id: 'DPI-02', citta: 'Vimodrone', data: '2026-04-30' },
-  ];
+export const dynamic = 'force-dynamic';
+
+interface Props { searchParams: { urgenza?: string; provincia?: string } }
+
+export default async function ScadenzePage({ searchParams }: Props) {
+  const supabase = createClient();
+  let q = supabase.from('v_scadenze_imminenti')
+    .select('product_instance_id, client_id, ragione_sociale, product_type, identificativo, citta, provincia, data_scadenza, urgenza, giorni_residui')
+    .order('data_scadenza', { ascending: true })
+    .limit(200);
+  if (searchParams.urgenza && searchParams.urgenza !== 'all') q = q.eq('urgenza', searchParams.urgenza);
+  if (searchParams.provincia && searchParams.provincia !== 'all') q = q.eq('provincia', searchParams.provincia);
+
+  const { data: rows } = await q;
 
   return (
     <div>
@@ -21,24 +29,28 @@ export default function ScadenzePage() {
         </div>
       </header>
 
-      <div className="card mb-4">
-        <div className="grid sm:grid-cols-3 gap-3">
+      <form className="card mb-4" method="get">
+        <div className="grid sm:grid-cols-3 gap-3 items-end">
           <div>
-            <label className="label" htmlFor="f-urg">Urgenza</label>
-            <select id="f-urg" className="input">
-              <option>Tutte</option><option>Scaduto</option><option>Urgente (≤7gg)</option><option>In avvicinamento (8-30gg)</option>
+            <label className="label" htmlFor="urgenza">Urgenza</label>
+            <select id="urgenza" name="urgenza" defaultValue={searchParams.urgenza || 'all'} className="input">
+              <option value="all">Tutte</option>
+              <option value="scaduto">Scaduto</option>
+              <option value="urgente">Urgente (≤7gg)</option>
+              <option value="in_avvicinamento">In avvicinamento (8-30gg)</option>
+              <option value="ok">Oltre 30gg</option>
             </select>
           </div>
           <div>
-            <label className="label" htmlFor="f-tipo">Tipo prodotto</label>
-            <select id="f-tipo" className="input"><option>Tutti</option></select>
+            <label className="label" htmlFor="provincia">Provincia</label>
+            <select id="provincia" name="provincia" defaultValue={searchParams.provincia || 'all'} className="input">
+              <option value="all">Tutte</option>
+              <option value="MI">MI</option><option value="MB">MB</option><option value="BG">BG</option><option value="LO">LO</option>
+            </select>
           </div>
-          <div>
-            <label className="label" htmlFor="f-prov">Provincia</label>
-            <select id="f-prov" className="input"><option>Tutte</option></select>
-          </div>
+          <button type="submit" className="btn-primary">Filtra</button>
         </div>
-      </div>
+      </form>
 
       <div className="card !p-0 overflow-hidden">
         <table className="w-full">
@@ -54,14 +66,19 @@ export default function ScadenzePage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
-            {rows.map((r) => (
-              <tr key={r.client + r.id} className="hover:bg-bg">
-                <td className="px-5 py-4"><input type="checkbox" aria-label={`Seleziona ${r.client}`} /></td>
-                <td className="px-5 py-4 font-semibold">{r.client}</td>
-                <td className="px-5 py-4">{r.prodotto}</td>
-                <td className="px-5 py-4 text-muted">{r.id}</td>
-                <td className="px-5 py-4">{r.citta}</td>
-                <td className="px-5 py-4"><ScadenzaBadge data={r.data} /></td>
+            {(rows ?? []).length === 0 && (
+              <tr><td colSpan={7} className="px-5 py-12 text-center text-muted">Nessuna scadenza trovata con i filtri attuali.</td></tr>
+            )}
+            {(rows ?? []).map((r: any) => (
+              <tr key={r.product_instance_id} className="hover:bg-bg">
+                <td className="px-5 py-4"><input type="checkbox" aria-label={`Seleziona ${r.ragione_sociale}`} /></td>
+                <td className="px-5 py-4">
+                  <Link href={`/clienti/${r.client_id}`} className="font-semibold text-brand hover:underline">{r.ragione_sociale}</Link>
+                </td>
+                <td className="px-5 py-4">{r.product_type}</td>
+                <td className="px-5 py-4 text-muted">{r.identificativo ?? '—'}</td>
+                <td className="px-5 py-4">{r.citta ?? '—'}</td>
+                <td className="px-5 py-4"><ScadenzaBadge data={r.data_scadenza} /></td>
                 <td className="px-5 py-4 text-right">
                   <button className="text-brand font-semibold hover:underline">Pianifica</button>
                 </td>
@@ -70,7 +87,7 @@ export default function ScadenzePage() {
           </tbody>
         </table>
         <div className="flex items-center justify-between px-5 py-3 border-t border-line text-sm text-muted">
-          <span>Pagina 1 di 1 · {rows.length} scadenze</span>
+          <span>{rows?.length ?? 0} scadenze</span>
         </div>
       </div>
     </div>

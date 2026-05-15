@@ -1,18 +1,35 @@
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import { ScadenzaBadge } from '@/components/ui/scadenza-badge';
+import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
 import { CalendarClock, Users, ClipboardList, TrendingUp, AlertTriangle } from 'lucide-react';
 
-// Admin landing page. Critical info above the fold — no scrolling required
-// to see today's scadenze + appointments.
-export default function DashboardPage() {
-  // Placeholder data until Supabase wiring lands. The shape matches the schema.
+export const dynamic = 'force-dynamic';
+
+export default async function DashboardPage() {
+  const supabase = createClient();
+
+  const [{ count: nClients }, { count: nOpps }, { data: scadenze }, { data: appuntamentiOggi }] = await Promise.all([
+    supabase.from('clients').select('id', { count: 'exact', head: true }).is('deleted_at', null),
+    supabase.from('opportunities').select('id', { count: 'exact', head: true }).eq('status', 'aperta'),
+    supabase.from('v_scadenze_imminenti')
+      .select('product_instance_id, ragione_sociale, product_type, identificativo, data_scadenza, urgenza, giorni_residui')
+      .order('giorni_residui', { ascending: true })
+      .limit(5),
+    supabase.from('v_appuntamenti_oggi')
+      .select('id, ragione_sociale, data_inizio, tecnico_nome, tecnico_cognome')
+      .order('data_inizio', { ascending: true })
+      .limit(5),
+  ]);
+
+  const urgenti = (scadenze ?? []).filter((s: any) => s.urgenza === 'urgente' || s.urgenza === 'scaduto').length;
+
   const kpis = [
-    { label: 'Scadenze entro 7gg', value: '14',  href: '/scadenze?urgenza=urgente', icon: AlertTriangle, tone: 'danger' },
-    { label: 'Appuntamenti oggi',  value: '8',   href: '/appuntamenti?giorno=oggi', icon: CalendarClock, tone: 'info' },
-    { label: 'Clienti attivi',     value: '342', href: '/clienti',                  icon: Users,         tone: 'muted' },
-    { label: 'Rapporti settimana', value: '27',  href: '/rapporti',                 icon: ClipboardList, tone: 'ok' },
-    { label: 'Opportunità aperte', value: '6',   href: '/opportunita',              icon: TrendingUp,    tone: 'warn' },
+    { label: 'Scadenze entro 7gg', value: urgenti,                         href: '/scadenze?urgenza=urgente',   icon: AlertTriangle, tone: 'danger' },
+    { label: 'Appuntamenti oggi',  value: appuntamentiOggi?.length ?? 0,   href: '/appuntamenti?giorno=oggi',   icon: CalendarClock, tone: 'info' },
+    { label: 'Clienti attivi',     value: nClients ?? 0,                   href: '/clienti',                    icon: Users,         tone: 'muted' },
+    { label: 'Rapporti settimana', value: '—',                             href: '/rapporti',                   icon: ClipboardList, tone: 'ok' },
+    { label: 'Opportunità aperte', value: nOpps ?? 0,                      href: '/opportunita',                icon: TrendingUp,    tone: 'warn' },
   ] as const;
 
   return (
@@ -23,7 +40,6 @@ export default function DashboardPage() {
         <p className="text-muted mt-1">Ecco la situazione operativa di N2O.</p>
       </header>
 
-      {/* KPI strip */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-8">
         {kpis.map(({ label, value, href, icon: Icon, tone }) => (
           <Link key={label} href={href} className="card hover:border-brand transition-colors">
@@ -42,21 +58,21 @@ export default function DashboardPage() {
             <h2 className="text-xl font-bold">Scadenze imminenti</h2>
             <Link href="/scadenze" className="text-brand font-semibold hover:underline">Vedi tutte →</Link>
           </header>
-          <ul className="divide-y divide-line">
-            {[
-              { client: 'Officine Bianchi Srl', product: 'Estintori (12 pz)', date: '2026-05-18' },
-              { client: 'Edilforte Spa',       product: 'Antincendio annuale', date: '2026-05-22' },
-              { client: 'Logistica Po Srl',    product: 'Formazione RSPP',     date: '2026-06-02' },
-            ].map((row) => (
-              <li key={row.client} className="py-3 flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="font-semibold truncate">{row.client}</p>
-                  <p className="text-sm text-muted truncate">{row.product}</p>
-                </div>
-                <ScadenzaBadge data={row.date} />
-              </li>
-            ))}
-          </ul>
+          {(scadenze?.length ?? 0) === 0 ? (
+            <p className="text-muted py-4">Nessuna scadenza nei prossimi 60 giorni.</p>
+          ) : (
+            <ul className="divide-y divide-line">
+              {scadenze!.map((row: any) => (
+                <li key={row.product_instance_id} className="py-3 flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="font-semibold truncate">{row.ragione_sociale}</p>
+                    <p className="text-sm text-muted truncate">{row.product_type}{row.identificativo ? ` · ${row.identificativo}` : ''}</p>
+                  </div>
+                  <ScadenzaBadge data={row.data_scadenza} />
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         <section className="card">
@@ -64,21 +80,25 @@ export default function DashboardPage() {
             <h2 className="text-xl font-bold">Appuntamenti di oggi</h2>
             <Link href="/appuntamenti" className="text-brand font-semibold hover:underline">Vedi calendario →</Link>
           </header>
-          <ul className="divide-y divide-line">
-            {[
-              { time: '09:00', client: 'Officine Bianchi Srl', tecnico: 'Giulia Rossi' },
-              { time: '11:30', client: 'Edilforte Spa',         tecnico: 'Marco Conti' },
-              { time: '15:00', client: 'Logistica Po Srl',      tecnico: 'Giulia Rossi' },
-            ].map((row) => (
-              <li key={row.time + row.client} className="py-3 flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="font-semibold truncate">{row.client}</p>
-                  <p className="text-sm text-muted truncate">Tecnico: {row.tecnico}</p>
-                </div>
-                <span className="badge-info tabular-nums">{row.time}</span>
-              </li>
-            ))}
-          </ul>
+          {(appuntamentiOggi?.length ?? 0) === 0 ? (
+            <p className="text-muted py-4">Nessun appuntamento per oggi.</p>
+          ) : (
+            <ul className="divide-y divide-line">
+              {appuntamentiOggi!.map((row: any) => (
+                <li key={row.id} className="py-3 flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="font-semibold truncate">{row.ragione_sociale}</p>
+                    <p className="text-sm text-muted truncate">
+                      Tecnico: {row.tecnico_nome ?? '—'} {row.tecnico_cognome ?? ''}
+                    </p>
+                  </div>
+                  <span className="badge-info tabular-nums">
+                    {new Date(row.data_inizio).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       </div>
     </div>

@@ -1,8 +1,9 @@
 'use client';
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 import * as XLSX from 'xlsx';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
-import { Upload, Eye, CheckCircle2 } from 'lucide-react';
+import { Eye, CheckCircle2 } from 'lucide-react';
+import { importClients, type ImportResult } from './actions';
 
 // Excel importer with column mapping + dry-run preview.
 // Phase 1 deliverable — geocoding on import via Google Maps happens server-side
@@ -29,6 +30,32 @@ export default function ImportaPage() {
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({}); // target -> source column
+  const [importing, startImport] = useTransition();
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+
+  function buildPayload() {
+    return rows.map((r) => {
+      const out: Record<string, unknown> = {};
+      const used = new Set<string>();
+      for (const t of TARGET_FIELDS) {
+        const src = mapping[t.key];
+        if (src) { out[t.key] = r[src]; used.add(src); }
+      }
+      // Unmapped columns → metadata JSONB
+      const metadata: Record<string, unknown> = {};
+      for (const h of headers) if (!used.has(h) && r[h] !== '' && r[h] != null) metadata[h] = r[h];
+      if (Object.keys(metadata).length) out.metadata = metadata;
+      return out;
+    });
+  }
+
+  function onConfirm() {
+    startImport(async () => {
+      const result = await importClients(buildPayload());
+      setImportResult(result);
+      setStep('done');
+    });
+  }
 
   function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]; if (!file) return;
@@ -140,18 +167,42 @@ export default function ImportaPage() {
           </p>
           <div className="flex gap-3 mt-6">
             <button className="btn-secondary" onClick={() => setStep('map')}>← Indietro</button>
-            {/* TODO(phase1): POST to /api/clienti/import → server-side geocode + insert */}
-            <button className="btn-primary" onClick={() => setStep('done')}>
-              <CheckCircle2 className="w-5 h-5" aria-hidden /> Conferma e importa {rows.length} clienti
+            <button className="btn-primary" onClick={onConfirm} disabled={importing}>
+              <CheckCircle2 className="w-5 h-5" aria-hidden />
+              {importing ? `Sto importando ${rows.length} clienti…` : `Conferma e importa ${rows.length} clienti`}
             </button>
           </div>
         </div>
       )}
 
-      {step === 'done' && (
+      {step === 'done' && importResult && (
         <div className="card border-ok bg-ok/5">
           <h2 className="text-xl font-bold text-ok mb-2">✓ Importazione completata</h2>
-          <p>Importati {rows.length} clienti. La geolocalizzazione è in corso in background.</p>
+          <ul className="space-y-1">
+            <li><strong>{importResult.inserted}</strong> clienti inseriti</li>
+            <li><strong>{importResult.skipped}</strong> righe scartate</li>
+            {importResult.errors.length > 0 && (
+              <li className="text-danger">
+                <strong>{importResult.errors.length}</strong> errori — controlla i log
+              </li>
+            )}
+          </ul>
+          {importResult.errors.length > 0 && (
+            <details className="mt-3">
+              <summary className="cursor-pointer font-semibold">Dettaglio errori</summary>
+              <ul className="mt-2 text-sm text-muted space-y-1">
+                {importResult.errors.slice(0, 20).map((e, i) => (
+                  <li key={i}>Riga {e.row}: {e.reason}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+          <div className="mt-4 flex gap-3">
+            <a href="/clienti" className="btn-primary">Vai all&apos;elenco clienti</a>
+            <button className="btn-secondary" onClick={() => { setStep('upload'); setImportResult(null); setRows([]); }}>
+              Importa un altro file
+            </button>
+          </div>
         </div>
       )}
     </div>

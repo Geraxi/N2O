@@ -1,15 +1,34 @@
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
+import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
-import { Upload, Plus, Mail, Phone } from 'lucide-react';
+import { Upload, Plus, Mail, Phone, MessageSquare } from 'lucide-react';
 
-// Client registry list. Phase 1 deliverable.
-// TODO(phase1): replace placeholder rows with Supabase query against `clients`.
-export default function ClientiPage() {
-  const rows = [
-    { id: '1', ragione_sociale: 'Officine Bianchi Srl', citta: 'Milano',     provincia: 'MI', preferenza: 'email' as const, n_prodotti: 14 },
-    { id: '2', ragione_sociale: 'Edilforte Spa',         citta: 'Monza',      provincia: 'MB', preferenza: 'sms'   as const, n_prodotti: 23 },
-    { id: '3', ragione_sociale: 'Logistica Po Srl',      citta: 'Gorgonzola', provincia: 'MI', preferenza: 'email' as const, n_prodotti: 8  },
-  ];
+export const dynamic = 'force-dynamic';
+
+interface Props {
+  searchParams: { q?: string; provincia?: string; pref?: string; page?: string };
+}
+
+const PAGE_SIZE = 25;
+
+export default async function ClientiPage({ searchParams }: Props) {
+  const supabase = createClient();
+  const page = Math.max(1, Number(searchParams.page || 1));
+  const from = (page - 1) * PAGE_SIZE;
+
+  let query = supabase
+    .from('clients')
+    .select('id, ragione_sociale, citta, provincia, preferenza_contatto, telefono, email, updated_at', { count: 'exact' })
+    .is('deleted_at', null)
+    .order('ragione_sociale', { ascending: true })
+    .range(from, from + PAGE_SIZE - 1);
+
+  if (searchParams.q) query = query.ilike('ragione_sociale', `%${searchParams.q}%`);
+  if (searchParams.provincia && searchParams.provincia !== 'all') query = query.eq('provincia', searchParams.provincia);
+  if (searchParams.pref && searchParams.pref !== 'all') query = query.eq('preferenza_contatto', searchParams.pref);
+
+  const { data: rows, count } = await query;
+  const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
 
   return (
     <div>
@@ -22,27 +41,33 @@ export default function ClientiPage() {
         </div>
       </header>
 
-      {/* Filters always visible above the table, not in a dropdown */}
-      <div className="card mb-4">
-        <div className="grid sm:grid-cols-3 gap-3">
-          <div>
-            <label className="label" htmlFor="f-search">Cerca</label>
-            <input id="f-search" className="input" placeholder="Ragione sociale, P.IVA…" />
+      <form className="card mb-4" method="get">
+        <div className="grid sm:grid-cols-4 gap-3 items-end">
+          <div className="sm:col-span-2">
+            <label className="label" htmlFor="q">Cerca</label>
+            <input id="q" name="q" defaultValue={searchParams.q} className="input" placeholder="Ragione sociale…" />
           </div>
           <div>
-            <label className="label" htmlFor="f-prov">Provincia</label>
-            <select id="f-prov" className="input">
-              <option>Tutte</option><option>MI</option><option>MB</option><option>BG</option>
+            <label className="label" htmlFor="provincia">Provincia</label>
+            <select id="provincia" name="provincia" defaultValue={searchParams.provincia || 'all'} className="input">
+              <option value="all">Tutte</option>
+              <option value="MI">MI</option><option value="MB">MB</option><option value="BG">BG</option><option value="LO">LO</option>
             </select>
           </div>
           <div>
-            <label className="label" htmlFor="f-pref">Preferenza contatto</label>
-            <select id="f-pref" className="input">
-              <option>Tutte</option><option>Email</option><option>SMS</option><option>Telefono</option>
-            </select>
+            <label className="label" htmlFor="pref">Contatto</label>
+            <div className="flex gap-2">
+              <select id="pref" name="pref" defaultValue={searchParams.pref || 'all'} className="input">
+                <option value="all">Tutti</option>
+                <option value="email">Email</option>
+                <option value="sms">SMS</option>
+                <option value="telefono">Telefono</option>
+              </select>
+              <button className="btn-primary" type="submit">Filtra</button>
+            </div>
           </div>
         </div>
-      </div>
+      </form>
 
       <div className="card !p-0 overflow-hidden">
         <table className="w-full">
@@ -52,25 +77,29 @@ export default function ClientiPage() {
               <th className="px-5 py-3 font-semibold">Città</th>
               <th className="px-5 py-3 font-semibold">Prov.</th>
               <th className="px-5 py-3 font-semibold">Contatto</th>
-              <th className="px-5 py-3 font-semibold text-right">Prodotti</th>
               <th className="px-5 py-3 font-semibold text-right">Azioni</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
-            {rows.map((r) => (
+            {(rows ?? []).length === 0 && (
+              <tr><td colSpan={5} className="px-5 py-12 text-center text-muted">
+                Nessun cliente trovato. <Link href="/clienti/importa" className="text-brand font-semibold underline">Importa da Excel</Link> per iniziare.
+              </td></tr>
+            )}
+            {(rows ?? []).map((r) => (
               <tr key={r.id} className="hover:bg-bg">
                 <td className="px-5 py-4 font-semibold">{r.ragione_sociale}</td>
-                <td className="px-5 py-4">{r.citta}</td>
-                <td className="px-5 py-4">{r.provincia}</td>
+                <td className="px-5 py-4">{r.citta ?? '—'}</td>
+                <td className="px-5 py-4">{r.provincia ?? '—'}</td>
                 <td className="px-5 py-4">
                   <span className="badge-muted">
-                    {r.preferenza === 'email' ? <Mail className="w-4 h-4" aria-hidden /> : <Phone className="w-4 h-4" aria-hidden />}
-                    {r.preferenza === 'email' ? 'Email' : 'SMS'}
+                    {r.preferenza_contatto === 'email' && <Mail className="w-4 h-4" aria-hidden />}
+                    {r.preferenza_contatto === 'sms' && <MessageSquare className="w-4 h-4" aria-hidden />}
+                    {r.preferenza_contatto === 'telefono' && <Phone className="w-4 h-4" aria-hidden />}
+                    {r.preferenza_contatto === 'email' ? 'Email' : r.preferenza_contatto === 'sms' ? 'SMS' : 'Telefono'}
                   </span>
                 </td>
-                <td className="px-5 py-4 text-right tabular-nums">{r.n_prodotti}</td>
                 <td className="px-5 py-4 text-right">
-                  {/* Action labels visible — no icon-only actions */}
                   <Link href={`/clienti/${r.id}`} className="text-brand font-semibold hover:underline">Apri</Link>
                 </td>
               </tr>
@@ -78,7 +107,11 @@ export default function ClientiPage() {
           </tbody>
         </table>
         <div className="flex items-center justify-between px-5 py-3 border-t border-line text-sm text-muted">
-          <span>Pagina 1 di 1 · 3 clienti</span>
+          <span>Pagina {page} di {totalPages} · {count ?? 0} clienti</span>
+          <div className="flex gap-2">
+            {page > 1 && <Link href={`?page=${page - 1}`} className="btn-secondary !py-1.5 !px-3">← Precedente</Link>}
+            {page < totalPages && <Link href={`?page=${page + 1}`} className="btn-secondary !py-1.5 !px-3">Successiva →</Link>}
+          </div>
         </div>
       </div>
     </div>
