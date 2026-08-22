@@ -39,10 +39,22 @@ export default async function ClienteDetailPage({ params }: { params: { id: stri
           </p>
         </div>
         <div className="flex gap-2">
-          <Link href={`/clienti/${cliente.id}/modifica`} className="btn-secondary">Modifica</Link>
-          <Link href={`/clienti/${cliente.id}/prodotti/nuovo`} className="btn-primary">
+          <button
+            type="button"
+            disabled
+            title="Disponibile in Fase 2"
+            className="btn-secondary opacity-60 cursor-not-allowed"
+          >
+            Modifica
+          </button>
+          <button
+            type="button"
+            disabled
+            title="Disponibile in Fase 2"
+            className="btn-primary opacity-60 cursor-not-allowed"
+          >
             <Plus className="w-5 h-5" aria-hidden /> Aggiungi prodotto
-          </Link>
+          </button>
         </div>
       </header>
 
