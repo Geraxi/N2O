@@ -1,12 +1,12 @@
 'use client';
 import { createBrowserClient } from '@supabase/ssr';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from './types';
 
-// Drop the `Database` generic until `supabase gen types typescript` is run
-// against the live Frankfurt project. Until then rows are typed as `any`,
-// which matches the runtime shape and avoids fighting placeholder types.
-export function createClient() {
+// See lib/supabase/server.ts for why this is a cast, not a generic param.
+export function createClient(): SupabaseClient<Database> {
   return createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  );
+  ) as SupabaseClient<Database>;
 }

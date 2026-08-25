@@ -33,7 +33,7 @@ export default async function TecnicoOggi() {
             <p className="text-muted mt-1">Goditi la giornata!</p>
           </div>
         )}
-        {apts?.map((a: any) => (
+        {apts?.map((a) => (
           <article key={a.id} className="card">
             <header className="mb-3">
               <p className="text-2xl font-bold tabular-nums">
