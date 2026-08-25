@@ -1,5 +1,6 @@
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import { ScadenzaBadge } from '@/components/ui/scadenza-badge';
+import { AppointmentStatusBadge } from '@/components/ui/appointment-status-badge';
 import { createClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
@@ -39,10 +40,22 @@ export default async function ClienteDetailPage({ params }: { params: { id: stri
           </p>
         </div>
         <div className="flex gap-2">
-          <Link href={`/clienti/${cliente.id}/modifica`} className="btn-secondary">Modifica</Link>
-          <Link href={`/clienti/${cliente.id}/prodotti/nuovo`} className="btn-primary">
+          <button
+            type="button"
+            disabled
+            title="Disponibile in Fase 2"
+            className="btn-secondary opacity-60 cursor-not-allowed"
+          >
+            Modifica
+          </button>
+          <button
+            type="button"
+            disabled
+            title="Disponibile in Fase 2"
+            className="btn-primary opacity-60 cursor-not-allowed"
+          >
             <Plus className="w-5 h-5" aria-hidden /> Aggiungi prodotto
-          </Link>
+          </button>
         </div>
       </header>
 
@@ -87,7 +100,7 @@ export default async function ClienteDetailPage({ params }: { params: { id: stri
             <p className="text-muted">Nessun prodotto registrato per questo cliente.</p>
           ) : (
             <ul className="divide-y divide-line">
-              {instances!.map((i: any) => (
+              {instances!.map((i) => (
                 <li key={i.id} className="py-3 flex items-center justify-between gap-4">
                   <div className="min-w-0">
                     <p className="font-semibold truncate">{i.product_types?.nome}</p>
@@ -111,13 +124,13 @@ export default async function ClienteDetailPage({ params }: { params: { id: stri
             <p className="text-muted">Nessun appuntamento registrato.</p>
           ) : (
             <ul className="divide-y divide-line">
-              {appointments!.map((a: any) => (
+              {appointments!.map((a) => (
                 <li key={a.id} className="py-3 flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <FileText className="w-5 h-5 text-muted" aria-hidden />
                     <span className="font-semibold">{new Date(a.data_inizio).toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}</span>
                   </div>
-                  <span className="badge-muted">{a.status}</span>
+                  <AppointmentStatusBadge status={a.status} />
                 </li>
               ))}
             </ul>

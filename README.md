@@ -7,10 +7,10 @@ Read [`CLAUDE.md`](./CLAUDE.md) for the full project briefing (commercial contex
 ## Quick start
 
 ```bash
-pnpm install        # or npm install
+npm install
 cp .env.example .env.local
 # Fill in Supabase (Frankfurt), Anthropic, Google Maps, Register.it, Skebby, Resend
-pnpm dev
+npm run dev
 ```
 
 Open http://localhost:3000 — auto-redirects to `/dashboard`.

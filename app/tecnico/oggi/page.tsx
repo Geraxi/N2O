@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
 import { MapPin, Phone, Play, ShieldCheck } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -34,7 +33,7 @@ export default async function TecnicoOggi() {
             <p className="text-muted mt-1">Goditi la giornata!</p>
           </div>
         )}
-        {apts?.map((a: any) => (
+        {apts?.map((a) => (
           <article key={a.id} className="card">
             <header className="mb-3">
               <p className="text-2xl font-bold tabular-nums">
@@ -54,12 +53,14 @@ export default async function TecnicoOggi() {
               </a>
             )}
             <div className="flex flex-col gap-3 mt-4">
-              <Link
-                href={`/tecnico/intervento/${a.id}`}
-                className="btn-primary !text-lg !py-4 w-full bg-ok hover:opacity-90"
+              <button
+                type="button"
+                disabled
+                title="Disponibile in Fase 3"
+                className="btn-primary !text-lg !py-4 w-full bg-ok opacity-60 cursor-not-allowed"
               >
                 <Play className="w-6 h-6" aria-hidden /> Inizia visita
-              </Link>
+              </button>
               {a.client_indirizzo && (
                 <a
                   href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent([a.client_indirizzo, a.client_citta].filter(Boolean).join(', '))}`}

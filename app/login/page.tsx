@@ -1,22 +1,30 @@
 'use client';
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { mapAuthError, safeNextPath } from '@/lib/supabase/auth-errors';
 import { ShieldCheck, Mail, CheckCircle2 } from 'lucide-react';
 
-export default function LoginPage() {
+interface Props {
+  searchParams: { next?: string; error?: string };
+}
+
+export default function LoginPage({ searchParams }: Props) {
   const [email, setEmail] = useState('');
   const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(searchParams.error ?? null);
+  const next = safeNextPath(searchParams.next);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setState('sending'); setError(null);
     const supabase = createClient();
+    const redirectTo = new URL('/auth/callback', window.location.origin);
+    if (next !== '/dashboard') redirectTo.searchParams.set('next', next);
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      options: { emailRedirectTo: redirectTo.toString() },
     });
-    if (error) { setError(error.message); setState('error'); return; }
+    if (error) { setError(mapAuthError(error.message)); setState('error'); return; }
     setState('sent');
   }
 
@@ -54,7 +62,7 @@ export default function LoginPage() {
                 />
               </div>
             </div>
-            {error && <p className="text-danger text-sm">Errore: {error}</p>}
+            {error && <p className="text-danger text-sm">{error}</p>}
             <button type="submit" className="btn-primary w-full" disabled={state === 'sending'}>
               {state === 'sending' ? 'Sto inviando…' : 'Invia link di accesso'}
             </button>

@@ -2,16 +2,37 @@ import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import { ScadenzaBadge } from '@/components/ui/scadenza-badge';
 import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
-import { CalendarClock, Users, ClipboardList, TrendingUp, AlertTriangle } from 'lucide-react';
+import { CalendarClock, Users, TrendingUp, AlertTriangle } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
+
+// Rapporti (Fase 3 — field ops reports) doesn't exist yet: no fake dash KPI,
+// no card at all until there's a real weekly count to show.
+const KPI_TONE_ICON_CLASS = {
+  danger: 'text-danger',
+  info: 'text-info',
+  muted: 'text-muted',
+  warn: 'text-warn',
+} as const;
 
 export default async function DashboardPage() {
   const supabase = createClient();
 
-  const [{ count: nClients }, { count: nOpps }, { data: scadenze }, { data: appuntamentiOggi }] = await Promise.all([
+  const [
+    { count: nClients },
+    { count: nOpps },
+    { count: nScadenzeUrgenti },
+    { count: nAppuntamentiOggi },
+    { data: scadenze },
+    { data: appuntamentiOggi },
+  ] = await Promise.all([
     supabase.from('clients').select('id', { count: 'exact', head: true }).is('deleted_at', null),
     supabase.from('opportunities').select('id', { count: 'exact', head: true }).eq('status', 'aperta'),
+    supabase.from('v_scadenze_imminenti')
+      .select('product_instance_id', { count: 'exact', head: true })
+      .in('urgenza', ['urgente', 'scaduto']),
+    supabase.from('v_appuntamenti_oggi')
+      .select('id', { count: 'exact', head: true }),
     supabase.from('v_scadenze_imminenti')
       .select('product_instance_id, ragione_sociale, product_type, identificativo, data_scadenza, urgenza, giorni_residui')
       .order('giorni_residui', { ascending: true })
@@ -22,14 +43,11 @@ export default async function DashboardPage() {
       .limit(5),
   ]);
 
-  const urgenti = (scadenze ?? []).filter((s: any) => s.urgenza === 'urgente' || s.urgenza === 'scaduto').length;
-
   const kpis = [
-    { label: 'Scadenze entro 7gg', value: urgenti,                         href: '/scadenze?urgenza=urgente',   icon: AlertTriangle, tone: 'danger' },
-    { label: 'Appuntamenti oggi',  value: appuntamentiOggi?.length ?? 0,   href: '/appuntamenti?giorno=oggi',   icon: CalendarClock, tone: 'info' },
-    { label: 'Clienti attivi',     value: nClients ?? 0,                   href: '/clienti',                    icon: Users,         tone: 'muted' },
-    { label: 'Rapporti settimana', value: '—',                             href: '/rapporti',                   icon: ClipboardList, tone: 'ok' },
-    { label: 'Opportunità aperte', value: nOpps ?? 0,                      href: '/opportunita',                icon: TrendingUp,    tone: 'warn' },
+    { label: 'Scadenze entro 7gg', value: nScadenzeUrgenti ?? 0,    href: '/scadenze?urgenza=urgente', icon: AlertTriangle, tone: 'danger' },
+    { label: 'Appuntamenti oggi',  value: nAppuntamentiOggi ?? 0,   href: '/appuntamenti?giorno=oggi', icon: CalendarClock, tone: 'info' },
+    { label: 'Clienti attivi',     value: nClients ?? 0,            href: '/clienti',                  icon: Users,         tone: 'muted' },
+    { label: 'Opportunità aperte', value: nOpps ?? 0,                href: '/opportunita',              icon: TrendingUp,    tone: 'warn' },
   ] as const;
 
   return (
@@ -40,11 +58,11 @@ export default async function DashboardPage() {
         <p className="text-muted mt-1">Ecco la situazione operativa di N2O.</p>
       </header>
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
         {kpis.map(({ label, value, href, icon: Icon, tone }) => (
           <Link key={label} href={href} className="card hover:border-brand transition-colors">
             <div className="flex items-start justify-between">
-              <Icon className={`w-6 h-6 text-${tone === 'muted' ? 'muted' : tone}`} aria-hidden />
+              <Icon className={`w-6 h-6 ${KPI_TONE_ICON_CLASS[tone]}`} aria-hidden />
               <span className="text-3xl font-bold tabular-nums">{value}</span>
             </div>
             <p className="mt-2 text-sm font-medium text-muted">{label}</p>
@@ -62,7 +80,7 @@ export default async function DashboardPage() {
             <p className="text-muted py-4">Nessuna scadenza nei prossimi 60 giorni.</p>
           ) : (
             <ul className="divide-y divide-line">
-              {scadenze!.map((row: any) => (
+              {scadenze!.map((row) => (
                 <li key={row.product_instance_id} className="py-3 flex items-center justify-between gap-4">
                   <div className="min-w-0">
                     <p className="font-semibold truncate">{row.ragione_sociale}</p>
@@ -84,7 +102,7 @@ export default async function DashboardPage() {
             <p className="text-muted py-4">Nessun appuntamento per oggi.</p>
           ) : (
             <ul className="divide-y divide-line">
-              {appuntamentiOggi!.map((row: any) => (
+              {appuntamentiOggi!.map((row) => (
                 <li key={row.id} className="py-3 flex items-center justify-between gap-4">
                   <div className="min-w-0">
                     <p className="font-semibold truncate">{row.ragione_sociale}</p>

@@ -1,7 +1,13 @@
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import { createClient } from '@/lib/supabase/server';
+import type { ContactPref } from '@/lib/supabase/types';
 import Link from 'next/link';
 import { Upload, Plus, Mail, Phone, MessageSquare } from 'lucide-react';
+
+const CONTACT_PREFS: readonly ContactPref[] = ['email', 'sms', 'telefono'];
+function isContactPref(value: string): value is ContactPref {
+  return (CONTACT_PREFS as readonly string[]).includes(value);
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -25,10 +31,19 @@ export default async function ClientiPage({ searchParams }: Props) {
 
   if (searchParams.q) query = query.ilike('ragione_sociale', `%${searchParams.q}%`);
   if (searchParams.provincia && searchParams.provincia !== 'all') query = query.eq('provincia', searchParams.provincia);
-  if (searchParams.pref && searchParams.pref !== 'all') query = query.eq('preferenza_contatto', searchParams.pref);
+  if (searchParams.pref && isContactPref(searchParams.pref)) query = query.eq('preferenza_contatto', searchParams.pref);
 
   const { data: rows, count } = await query;
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
+
+  const pageHref = (targetPage: number) => {
+    const params = new URLSearchParams();
+    if (searchParams.q) params.set('q', searchParams.q);
+    if (searchParams.provincia && searchParams.provincia !== 'all') params.set('provincia', searchParams.provincia);
+    if (searchParams.pref && searchParams.pref !== 'all') params.set('pref', searchParams.pref);
+    params.set('page', String(targetPage));
+    return `?${params.toString()}`;
+  };
 
   return (
     <div>
@@ -109,8 +124,8 @@ export default async function ClientiPage({ searchParams }: Props) {
         <div className="flex items-center justify-between px-5 py-3 border-t border-line text-sm text-muted">
           <span>Pagina {page} di {totalPages} · {count ?? 0} clienti</span>
           <div className="flex gap-2">
-            {page > 1 && <Link href={`?page=${page - 1}`} className="btn-secondary !py-1.5 !px-3">← Precedente</Link>}
-            {page < totalPages && <Link href={`?page=${page + 1}`} className="btn-secondary !py-1.5 !px-3">Successiva →</Link>}
+            {page > 1 && <Link href={pageHref(page - 1)} className="btn-secondary !py-1.5 !px-3">← Precedente</Link>}
+            {page < totalPages && <Link href={pageHref(page + 1)} className="btn-secondary !py-1.5 !px-3">Successiva →</Link>}
           </div>
         </div>
       </div>
